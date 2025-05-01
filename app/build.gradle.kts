@@ -14,11 +14,6 @@ plugins {
 
 android {
     compileSdk = 35
-    // 加载 keystore.properties
-    val keystorePropertiesFile = rootProject.file("keystore.properties")
-    val keystoreProps = Properties().apply {
-        load(FileInputStream(keystorePropertiesFile))
-    }
     defaultConfig {
         // 你如果根据InstallerX的源码进行打包成apk或其他安装包格式
         // 请换一个applicationId，不要和官方的任何发布版本产生冲突。
@@ -45,38 +40,8 @@ android {
         }
     }
 
-    signingConfigs {
-        getByName("debug") {
-            keyAlias = keystoreProps.getProperty("keyAlias")
-            keyPassword = keystoreProps.getProperty("keyPassword")
-            storeFile = rootProject.file(keystoreProps["storeFile"] as String)
-            storePassword = keystoreProps.getProperty("storePassword")
-            enableV1Signing = true
-            enableV2Signing = true
-        }
-
-        create("release") {
-            keyAlias = keystoreProps.getProperty("keyAlias")
-            keyPassword = keystoreProps.getProperty("keyPassword")
-            storeFile = rootProject.file(keystoreProps["storeFile"] as String)
-            storePassword = keystoreProps.getProperty("storePassword")
-            enableV1Signing = true
-            enableV2Signing = true
-        }
-    }
-
     buildTypes {
-        getByName("debug") {
-            signingConfig = signingConfigs.getByName("debug")
-            isMinifyEnabled = false
-            proguardFiles(
-                getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro"
-            )
-        }
-
-        getByName("release") {
-            signingConfig = signingConfigs.getByName("release")
+        release {
             isMinifyEnabled = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
@@ -118,7 +83,7 @@ android {
     }
 
     kotlin {
-        jvmToolchain(17)
+        //jvmToolchain(17)
     }
 
     buildFeatures {
@@ -205,3 +170,4 @@ dependencies {
 
     implementation(libs.okhttp)
 }
+apply(rootDir.resolve("gradle/signing.gradle"))
