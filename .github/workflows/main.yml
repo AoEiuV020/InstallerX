@@ -101,7 +101,7 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
       - name: Build with Gradle
-        run: ./gradlew assembleRelease
+        run: ./gradlew app:assembleRelease
       - uses: AoEiuV020/sign-android-release@v2
         name: Sign app APK
         env:
