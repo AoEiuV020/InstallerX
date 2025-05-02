@@ -20,6 +20,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import org.koin.core.annotation.KoinInternalApi
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.get
 import org.koin.core.parameter.parametersOf
@@ -30,6 +31,8 @@ class InstallerActivity : ComponentActivity(), KoinComponent {
     }
 
     private var installer by mutableStateOf<InstallerRepo?>(null)
+    @OptIn(KoinInternalApi::class)
+    private val logger = getKoin().logger
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -40,7 +43,7 @@ class InstallerActivity : ComponentActivity(), KoinComponent {
 
     private fun logIntent(intent: Intent?) {
         if (intent == null) {
-            Log.d("IntentLogger", "Intent is null")
+            logger.error("Intent is null")
             return
         }
 
@@ -91,7 +94,7 @@ class InstallerActivity : ComponentActivity(), KoinComponent {
         }
 
         sb.appendLine("===========================")
-        Log.d("IntentLogger", sb.toString())
+        logger.info(sb.toString())
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
