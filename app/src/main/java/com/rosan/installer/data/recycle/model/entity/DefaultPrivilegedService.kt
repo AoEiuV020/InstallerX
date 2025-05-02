@@ -8,16 +8,27 @@ import android.content.pm.PackageManager
 import android.content.pm.ParceledListSlice
 import android.content.pm.ResolveInfo
 import android.net.Uri
-import android.os.Build
 import android.os.Process
 import android.os.ServiceManager
+import androidx.core.net.toUri
 import com.rosan.installer.data.recycle.util.InstallIntentFilter
 import com.rosan.installer.data.recycle.util.delete
 import com.rosan.installer.data.reflect.repo.ReflectRepo
 import org.koin.core.component.inject
+import java.io.File
 
 class DefaultPrivilegedService : BasePrivilegedService() {
     private val reflect by inject<ReflectRepo>()
+    override fun cacheUri(uriString: String, tempFilePath: String) {
+        val uri = uriString.toUri()
+        val inputStream = context.contentResolver.openInputStream(uri)!!
+        val tempFile = File(tempFilePath)
+        tempFile.outputStream().use { output ->
+            inputStream.use {
+                it.copyTo(output)
+            }
+        }
+    }
 
     override fun delete(paths: Array<out String>) = paths.delete()
 

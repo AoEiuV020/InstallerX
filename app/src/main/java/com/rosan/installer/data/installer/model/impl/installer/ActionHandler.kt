@@ -6,6 +6,7 @@ import android.content.ContentResolver
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.content.res.AssetFileDescriptor
 import android.net.Uri
 import android.os.ParcelFileDescriptor
 import android.system.Os
@@ -21,8 +22,11 @@ import com.rosan.installer.data.installer.model.entity.SelectInstallEntity
 import com.rosan.installer.data.installer.model.exception.ResolveException
 import com.rosan.installer.data.installer.model.impl.InstallerRepoImpl
 import com.rosan.installer.data.installer.repo.InstallerRepo
+import com.rosan.installer.data.recycle.util.useUserService
 import com.rosan.installer.data.settings.model.room.entity.ConfigEntity
 import com.rosan.installer.data.settings.util.ConfigUtil
+import com.rosan.installer.data.settings.util.ConfigUtil.Companion.globalAuthorizer
+import com.rosan.installer.data.settings.util.ConfigUtil.Companion.globalCustomizeAuthorizer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.awaitClose
@@ -176,7 +180,32 @@ class ActionHandler(scope: CoroutineScope, installer: InstallerRepo) :
             else -> {
                 val uri = intent.data
                 if (uri == null) emptyList()
-                else listOf(uri)
+                else if (uri.host == "com.oppo.packageinstaller.fileprovider") {
+                    /*
+                    ====== Intent Details ======
+                    Action: android.intent.action.VIEW
+                    Data: content://com.oppo.packageinstaller.fileprovider/root-dir/vmdl24437923.tmp/base.apk
+                    Type: application/vnd.android.package-archive
+                    Package: null
+                    Component: com.rosan.installer.x.revived/com.rosan.installer.ui.activity.InstallerActivity
+                    Flags: 0x13800000 (327155712)
+                    Categories: null
+                    Extras:
+                    - callerpkg (null): null
+                    - apkPath (String): /data/app/vmdl24437923.tmp/base.apk
+                    - installFlags (Integer): 272629874
+                    ClipData: null
+                    ===========================
+                    */
+                    val apkPath = intent.getStringExtra("apkPath")
+                    if (apkPath == null) emptyList()
+                    else {
+                        val apkFile = File(apkPath)
+                        // 有可能没有权限所以不在这里判断而是直接添加，后续再判断处理，
+                        // 不能直接传原始intent.data，会识别不到读取者同样读取不了，
+                        listOf(Uri.fromFile(apkFile))
+                    }
+                } else listOf(uri)
             }
         }
 
@@ -192,7 +221,22 @@ class ActionHandler(scope: CoroutineScope, installer: InstallerRepo) :
     }
 
     private fun resolveDataFileUri(activity: Activity, uri: Uri): List<DataEntity> {
-        val path = uri.path ?: throw Exception("can't get uri path: $uri")
+        var path = uri.path ?: throw Exception("can't get uri path: $uri")
+        val file = File(path)
+        if (!file.canRead()) {
+            // 没权限的文件转给shizuku等处理，简单复制成到缓存中，
+            val tempFile =
+                File.createTempFile(UUID.randomUUID().toString(), null, File(cacheDirectory))
+            useUserService(
+                ConfigEntity.default.copy(
+                    authorizer = globalAuthorizer,
+                    customizeAuthorizer = globalCustomizeAuthorizer
+                ), null
+            ) {
+                it.privileged.cacheUri(uri.toString(), tempFile.absolutePath)
+            }
+            path = tempFile.absolutePath
+        }
         val data = DataEntity.FileEntity(path)
         data.source = DataEntity.FileEntity(path)
         return listOf(data)

@@ -2,6 +2,7 @@ package com.rosan.installer.ui.activity
 
 import android.content.Intent
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Box
@@ -33,7 +34,64 @@ class InstallerActivity : ComponentActivity(), KoinComponent {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         restoreInstaller(savedInstanceState)
+        logIntent(intent)
         showContent()
+    }
+
+    private fun logIntent(intent: Intent?) {
+        if (intent == null) {
+            Log.d("IntentLogger", "Intent is null")
+            return
+        }
+
+        val sb = StringBuilder("\n")
+        sb.appendLine("====== Intent Details ======")
+
+        // Basic info
+        sb.appendLine("Action: ${intent.action ?: "null"}")
+        sb.appendLine("Data: ${intent.dataString ?: "null"}")
+        sb.appendLine("Type: ${intent.type ?: "null"}")
+        sb.appendLine("Package: ${intent.`package` ?: "null"}")
+        sb.appendLine("Component: ${intent.component?.flattenToString() ?: "null"}")
+        sb.appendLine("Flags: 0x${Integer.toHexString(intent.flags)} (${intent.flags})")
+
+        // Categories
+        if (intent.categories != null) {
+            sb.appendLine("Categories:")
+            for (category in intent.categories) {
+                sb.appendLine("  - $category")
+            }
+        } else {
+            sb.appendLine("Categories: null")
+        }
+
+        // Extras
+        if (intent.extras != null) {
+            sb.appendLine("Extras:")
+            for (key in intent.extras!!.keySet()) {
+                val value = intent.extras!!.get(key)
+                sb.appendLine("  - $key (${value?.javaClass?.simpleName ?: "null"}): $value")
+            }
+        } else {
+            sb.appendLine("Extras: null")
+        }
+
+        // ClipData
+        if (intent.clipData != null) {
+            sb.appendLine("ClipData:")
+            for (i in 0 until intent.clipData!!.itemCount) {
+                val item = intent.clipData!!.getItemAt(i)
+                sb.appendLine("  - Item $i: ${item.text}")
+                if (item.uri != null) {
+                    sb.appendLine("    URI: ${item.uri}")
+                }
+            }
+        } else {
+            sb.appendLine("ClipData: null")
+        }
+
+        sb.appendLine("===========================")
+        Log.d("IntentLogger", sb.toString())
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
