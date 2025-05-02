@@ -1,0 +1,172 @@
+name: Android CI
+env:
+  TZ: Asia/Shanghai
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - '*'
+    branches:
+      - '*'
+    paths-ignore:
+      - '**/README.md'
+      - '.github/workflows/*'
+      - '!.github/workflows/main.yml'
+  pull_request:
+    paths-ignore:
+      - '**/README.md'
+      - '.github/workflows/*'
+      - '!.github/workflows/main.yml'
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: init custom env
+        run: |
+          set -a
+          BUILD_NAME="${GITHUB_REPOSITORY#*/}"
+          if [[ ${GITHUB_REF} == refs/tags* ]]
+          then
+              CREATE_RELEASE="true"
+              BUILD_VERSION=${GITHUB_REF#refs/tags/}
+              if [[ -x ./latest-changelog.sh ]]
+              then
+                  RELEASE_BODY=$(./latest-changelog.sh $BUILD_VERSION |sed '1s/[，,]$//;1s/^\(.*\)$/### \1\n/')
+                  TG_CHANGELOG=$(./latest-changelog.sh $BUILD_VERSION |sed -n '{;=;p}' | sed "N;s/\n/. /g")
+              fi
+              if [[ -z "$RELEASE_BODY" ]]
+              then
+                  RELEASE_BODY='### ${{ github.event.head_commit.message }}'
+                  TG_CHANGELOG="$(echo "$RELEASE_BODY"|sed -n "s/### \(.*\)/\1/p" |sed -n '{;=;p}' | sed "N;s/\n/. /g")"
+              fi
+          elif [[ ${GITHUB_REF} == refs/pull* ]]
+          then
+              CREATE_RELEASE="false"
+              num=${GITHUB_REF#refs/pull/}
+              num=${num%/merge}
+              BUILD_VERSION=pr-${num}-"$(date +'%Y%m%d%H%M%S')"
+          elif [[ ${GITHUB_EVENT_NAME} == workflow_dispatch ]]
+          then
+              CREATE_RELEASE="false"
+              BUILD_VERSION="$(date +'%Y%m%d%H%M%S')"
+          elif [[ ${GITHUB_REF} == refs/heads* ]]
+          then
+              CREATE_RELEASE="true"
+              PRE_RELEASE="true"
+              BUILD_VERSION="${GITHUB_REF#refs/heads/}-$(date +'%Y%m%d%H%M%S')"
+              RELEASE_BODY=$(echo '${{ toJson(github.event.commits) }}' |jq -r 'map("### "+.message)|join("\n\n------\n")')
+              TG_CHANGELOG="$(echo "$RELEASE_BODY"|sed -n "s/### \(.*\)/\1/p" |sed -n '{;=;p}' | sed "N;s/\n/. /g")"
+              VERSION_PREFIX='beta-'
+          else
+              CREATE_RELEASE="false"
+              BUILD_VERSION="$(date +'%Y%m%d%H%M%S')"
+          fi
+          BUILD_NAME_WITH_VERSION="$BUILD_NAME-$BUILD_VERSION"
+          echo BUILD_NAME="$BUILD_NAME" >> .custom_env
+          echo BUILD_VERSION="$BUILD_VERSION" >> .custom_env
+          echo BUILD_NAME_WITH_VERSION="$BUILD_NAME_WITH_VERSION" >> .custom_env
+          echo CREATE_RELEASE="$CREATE_RELEASE" >> .custom_env
+          echo PRE_RELEASE="$PRE_RELEASE" >> .custom_env
+          if test -n "$RELEASE_BODY"
+          then
+              echo 'RELEASE_BODY<<EOF' >> .custom_env
+              echo "$RELEASE_BODY" >> .custom_env
+              echo 'EOF' >> .custom_env
+              if [ -f template-update.md ]
+              then
+                  echo 'UPDATE_BODY<<EOF' >> .custom_env
+                  envsubst < template-update.md >> .custom_env
+                  echo >> .custom_env
+                  echo 'EOF' >> .custom_env
+              fi
+          fi
+          echo DEPLOY_WEB="true" >> .custom_env
+          if [[ "$CREATE_RELEASE" == "true" && -n "${{ secrets.TELEGRAM_TO }}" && -n "${{ secrets.TELEGRAM_TOKEN }}" ]]
+          then
+              echo SEND_TELEGRAM="true" >> .custom_env
+          fi
+          if [[ "$CREATE_RELEASE" == "true" && -n "${{ secrets.FDROID_REPO_TOKEN }}" ]]
+          then
+              echo PUSH_FDROID="true" >> .custom_env
+          fi
+          cat .custom_env
+          cat .custom_env >> $GITHUB_ENV
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+      - name: Build with Gradle
+        run: ./gradlew assembleRelease
+      - uses: AoEiuV020/sign-android-release@v2
+        name: Sign app APK
+        env:
+          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+        if: ${{ env.SIGNING_KEY != '' }}
+        with:
+          releaseDirectory: build/.app/outputs/apk/release
+          signingKeyBase64: ${{ secrets.SIGNING_KEY }}
+          alias: ${{ secrets.ALIAS }}
+          keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD }}
+          keyPassword: ${{ secrets.KEY_PASSWORD }}
+      - name: pick release file
+        run: |
+          find ./build/.app/outputs/
+          find ./build/.app/outputs -name '*.apk' -exec mv {} $BUILD_NAME_WITH_VERSION-android.apk \;
+          find ./build/.app/outputs -name 'mapping.txt' -exec mv {} $BUILD_NAME_WITH_VERSION-android-mapping.txt \;
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-build
+          path: ${{ env.BUILD_NAME_WITH_VERSION }}-android.apk
+      - name: create release
+        if: ${{ env.CREATE_RELEASE == 'true' }}
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ env.BUILD_VERSION }}
+          release_name: ${{ env.BUILD_VERSION }}
+          body: ${{ github.event.commits[0].message }}
+          draft: true
+          prerelease: ${{ env.PRE_RELEASE == 'true' }}
+      - name: Upload Release Asset android
+        if: ${{ env.CREATE_RELEASE == 'true' }}
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ${{ env.BUILD_NAME_WITH_VERSION }}-android.apk
+          asset_name: ${{ env.BUILD_NAME_WITH_VERSION }}-android.apk
+          asset_content_type: application/zip
+      - name: Upload android mapping
+        if: ${{ env.CREATE_RELEASE == 'true' }}
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ${{ env.BUILD_NAME_WITH_VERSION }}-android-mapping.txt
+          asset_name: ${{ env.BUILD_NAME_WITH_VERSION }}-android-mapping.txt
+          asset_content_type: text/plain
+      - name: public release
+        if: ${{ env.CREATE_RELEASE == 'true' }}
+        uses: eregon/publish-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          release_id: ${{ steps.create_release.outputs.id }}
+      - name: push to fdroid repo
+        if: ${{ env.PUSH_FDROID == 'true' }}
+        uses: AoEiuV020/f-droid-repo/actions/push-fdroid@main
+        with:
+          apk-path: ${{ env.BUILD_NAME_WITH_VERSION }}-android.apk
+          target-repo: AoEiuV020/f-droid-repo
+          github-token: ${{ secrets.FDROID_REPO_TOKEN }}
+
