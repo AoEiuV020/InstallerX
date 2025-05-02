@@ -1,5 +1,15 @@
 # InstallerX
 
+基于wxxsfxyzm/InstallerX， 适配一加13, 修复adb安装，  
+
+oppo手机（具体是一加13）先通过CrossProfileTestApp.apk禁用默认安装程序重启后adb安装也可以选择installX,这时候会报权限错误，原因是intent.data不可读取，  
+但intent.extras有apk文件绝对路径可以读取，所以这里针对com.oppo.packageinstaller.fileprovider改成取出文件路径使用，  
+然而文件本身也没权限读取，所以交给shizuku等复制一份缓存文件再继续，  
+值得注意的是如果app已存在的话更新安装是不会触发installX的，  
+另外有时会有不明原因没有拉起installX直接报错 Failure [-99] 这时候需要手动kill掉 com.android.packageinstaller 进程，重新adb install就正常了，  
+还有配置文件需要覆盖adb安装的情况需要勾选 com.android.packageinstaller 系统应用，  
+至于f-droid,需要在f-droid开启“强制使用旧安装器”才会使用installX安装，有效，但f-droid无法监听到安装成功的事件，  
+
 ## 介绍
 
 一款应用安装程序，为什么不试试【InstallerX】？
