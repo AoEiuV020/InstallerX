@@ -19,7 +19,7 @@ android {
         // 请换一个applicationId，不要和官方的任何发布版本产生冲突。
         // If you use InstallerX source code, package it into apk or other installation package format
         // Please change the applicationId to one that does not conflict with any official release.
-        applicationId = "com.rosan.installer.x.revived"
+        applicationId = "com.aoeiuv020.installer"
         namespace = "com.rosan.installer"
         minSdk = 34
         targetSdk = 35
