@@ -37,8 +37,8 @@ class InstallerActivity : ComponentActivity(), KoinComponent {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         restoreInstaller(savedInstanceState)
-        logIntent(intent)
         showContent()
+        logIntent(intent)
     }
 
     private fun logIntent(intent: Intent?) {
@@ -104,9 +104,9 @@ class InstallerActivity : ComponentActivity(), KoinComponent {
 
     override fun onNewIntent(intent: Intent) {
         this.intent = intent
-        logIntent(intent)
         super.onNewIntent(intent)
         restoreInstaller()
+        logIntent(intent)
     }
 
     private var job: Job? = null
@@ -134,6 +134,7 @@ class InstallerActivity : ComponentActivity(), KoinComponent {
         job = scope.launch {
             launch {
                 installer.progress.collect { progress ->
+                    logger.info(progress.toString())
                     when (progress) {
                         is ProgressEntity.Ready -> {
                             installer.resolve(this@InstallerActivity)
