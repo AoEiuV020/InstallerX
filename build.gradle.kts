@@ -15,3 +15,7 @@ tasks.register("Delete", Delete::class) {
     delete(rootProject.layout.buildDirectory)
 }
 
+allprojects {
+    project.layout.buildDirectory.set(rootDir.resolve("build").resolve(project.path.replace(":", ".")))
+}
+
